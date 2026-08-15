@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  color: #14181A;
+}
+
+::selection {
+  background: #E7C77E;
+  color: #14181A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid #B8862E;
+  outline-offset: 2px;
+}
