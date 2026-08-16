@@ -10,6 +10,7 @@ export default function UploadModal({ onClose, onSaved }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   async function handleFile(file) {
     if (!file) return;
@@ -86,7 +87,13 @@ export default function UploadModal({ onClose, onSaved }) {
                   onClick={() => fileInputRef.current?.click()}
                   className="focus-ring bg-ink text-paper font-semibold text-sm px-6 py-3 rounded-full hover:bg-ink-soft transition-colors"
                 >
-                  Take photo / choose file
+                  Take photo
+                </button>
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="focus-ring border border-ink text-ink font-semibold text-sm px-6 py-3 rounded-full hover:bg-ink/5 transition-colors"
+                >
+                  Choose from gallery
                 </button>
               </div>
               <input
@@ -94,6 +101,13 @@ export default function UploadModal({ onClose, onSaved }) {
                 type="file"
                 accept="image/*"
                 capture="environment"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
                 className="hidden"
                 onChange={(e) => handleFile(e.target.files?.[0])}
               />
