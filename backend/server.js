@@ -96,27 +96,38 @@ Respond with ONLY the JSON object.`;
     let orResponse = null;
     let lastErrText = "";
     for (const model of VISION_MODELS) {
-      orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "user",
-              content: [{ type: "text", text: prompt }, fileContentBlock],
-            },
-          ],
-        }),
-      });
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // give up on this model after 15s
 
-      if (orResponse.ok) break; // success, stop trying more models
+        orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "text", text: prompt }, fileContentBlock],
+              },
+            ],
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-      lastErrText = await orResponse.text();
-      console.warn(`Model ${model} failed, trying next:`, lastErrText);
+        if (orResponse.ok) break; // success, stop trying more models
+
+        lastErrText = await orResponse.text();
+        console.warn(`Model ${model} failed, trying next:`, lastErrText);
+      } catch (err) {
+        lastErrText = err.name === "AbortError" ? "Timed out after 15s" : String(err);
+        console.warn(`Model ${model} errored, trying next:`, lastErrText);
+        orResponse = null;
+      }
     }
 
     if (!orResponse || !orResponse.ok) {

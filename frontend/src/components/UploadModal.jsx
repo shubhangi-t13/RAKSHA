@@ -6,14 +6,17 @@ const STEPS = { PICK: "pick", EXTRACTING: "extracting", REVIEW: "review", ERROR:
 export default function UploadModal({ onClose, onSaved }) {
   const [step, setStep] = useState(STEPS.PICK);
   const [preview, setPreview] = useState(null);
+  const [isPdfFile, setIsPdfFile] = useState(false);
   const [form, setForm] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
+  const pdfInputRef = useRef(null);
 
   async function handleFile(file) {
     if (!file) return;
+    setIsPdfFile(file.type === "application/pdf");
     setPreview(URL.createObjectURL(file));
     setStep(STEPS.EXTRACTING);
     try {
@@ -80,7 +83,7 @@ export default function UploadModal({ onClose, onSaved }) {
                 📷
               </div>
               <p className="font-body text-ink-soft mb-6 text-sm">
-                Take a photo of your bill, or upload one from your gallery.
+                Take a photo, choose an image, or upload a PDF bill.
               </p>
               <div className="flex flex-col gap-3">
                 <button
@@ -94,6 +97,12 @@ export default function UploadModal({ onClose, onSaved }) {
                   className="focus-ring border border-ink text-ink font-semibold text-sm px-6 py-3 rounded-full hover:bg-ink/5 transition-colors"
                 >
                   Choose from gallery
+                </button>
+                <button
+                  onClick={() => pdfInputRef.current?.click()}
+                  className="focus-ring border border-ink text-ink font-semibold text-sm px-6 py-3 rounded-full hover:bg-ink/5 transition-colors"
+                >
+                  Upload PDF
                 </button>
               </div>
               <input
@@ -111,13 +120,25 @@ export default function UploadModal({ onClose, onSaved }) {
                 className="hidden"
                 onChange={(e) => handleFile(e.target.files?.[0])}
               />
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+              />
             </div>
           )}
 
           {step === STEPS.EXTRACTING && (
             <div className="text-center py-10">
-              {preview && (
+              {preview && !isPdfFile && (
                 <img src={preview} alt="Bill preview" className="max-h-48 mx-auto rounded-xl mb-5 opacity-70 rotate-1" />
+              )}
+              {preview && isPdfFile && (
+                <div className="mx-auto mb-5 w-16 h-20 bg-paper-dim border border-ink/15 rounded-lg flex items-center justify-center text-2xl">
+                  📄
+                </div>
               )}
               <div className="w-10 h-10 mx-auto border-2 border-brass border-t-transparent rounded-full animate-spin mb-4" />
               <p className="font-body text-ink-soft text-sm">Reading your bill…</p>
@@ -126,7 +147,12 @@ export default function UploadModal({ onClose, onSaved }) {
 
           {step === STEPS.REVIEW && form && (
             <div className="space-y-4">
-              {preview && <img src={preview} alt="Bill preview" className="max-h-40 mx-auto rounded-xl" />}
+              {preview && !isPdfFile && <img src={preview} alt="Bill preview" className="max-h-40 mx-auto rounded-xl" />}
+              {preview && isPdfFile && (
+                <div className="mx-auto w-14 h-16 bg-paper-dim border border-ink/15 rounded-lg flex items-center justify-center text-xl">
+                  📄
+                </div>
+              )}
               <p className="font-mono text-[10px] uppercase tracking-wider text-brass text-center">
                 Check the details below
               </p>
