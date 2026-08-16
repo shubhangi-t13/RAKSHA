@@ -1,1 +1,0 @@
-echo node_modules>.gitignore && echo frontend/node_modules>>.gitignore && echo backend/node_modules>>.gitignore && echo frontend/dist>>.gitignore && echo backend/.env>>.gitignore
