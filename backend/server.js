@@ -6,7 +6,6 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
@@ -19,8 +18,8 @@ app.use(express.json({ limit: "15mb" }));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const visionModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const VISION_MODEL = "google/gemma-4-31b-it:free";
 
 // ---------- tiny JSON "database" helpers ----------
 async function readDb() {
@@ -83,12 +82,34 @@ Extract the following fields as strict JSON only, no prose, no markdown fences:
 If a field truly cannot be determined, use null for that field (except warrantyDurationMonths, always give your best estimate).
 Respond with ONLY the JSON object.`;
 
-    const result = await visionModel.generateContent([
-      { inlineData: { mimeType: mediaType, data: base64 } },
-      { text: prompt },
-    ]);
+    const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: VISION_MODEL,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
+            ],
+          },
+        ],
+      }),
+    });
 
-    const raw = result.response.text().trim();
+    if (!orResponse.ok) {
+      const errText = await orResponse.text();
+      console.error("OpenRouter error:", errText);
+      return res.status(502).json({ error: "Extraction service error", detail: errText });
+    }
+
+    const orData = await orResponse.json();
+    const raw = orData.choices?.[0]?.message?.content?.trim() || "{}";
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
 
     let extracted;
