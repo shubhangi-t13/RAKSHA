@@ -19,7 +19,13 @@ app.use(express.json({ limit: "15mb" }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const VISION_MODEL = "google/gemma-4-31b-it:free";
+// Try these in order — free models on OpenRouter get rate-limited under heavy
+// shared traffic, so fall back to the next one if the first is busy.
+const VISION_MODELS = [
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+];
 
 // ---------- tiny JSON "database" helpers ----------
 async function readDb() {
@@ -62,7 +68,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 // Extract structured data from a photographed bill using Claude vision
 app.post("/api/extract-bill", upload.single("image"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No image uploaded (field name: image)" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded (field name: image)" });
 
     const base64 = req.file.buffer.toString("base64");
     const mediaType = req.file.mimetype || "image/jpeg";
@@ -82,30 +88,40 @@ Extract the following fields as strict JSON only, no prose, no markdown fences:
 If a field truly cannot be determined, use null for that field (except warrantyDurationMonths, always give your best estimate).
 Respond with ONLY the JSON object.`;
 
-    const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: VISION_MODEL,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
-            ],
-          },
-        ],
-      }),
-    });
+    const isPdf = mediaType === "application/pdf";
+    const fileContentBlock = isPdf
+      ? { type: "file", file: { filename: req.file.originalname || "bill.pdf", file_data: `data:${mediaType};base64,${base64}` } }
+      : { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } };
 
-    if (!orResponse.ok) {
-      const errText = await orResponse.text();
-      console.error("OpenRouter error:", errText);
-      return res.status(502).json({ error: "Extraction service error", detail: errText });
+    let orResponse = null;
+    let lastErrText = "";
+    for (const model of VISION_MODELS) {
+      orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: prompt }, fileContentBlock],
+            },
+          ],
+        }),
+      });
+
+      if (orResponse.ok) break; // success, stop trying more models
+
+      lastErrText = await orResponse.text();
+      console.warn(`Model ${model} failed, trying next:`, lastErrText);
+    }
+
+    if (!orResponse || !orResponse.ok) {
+      console.error("All extraction models failed:", lastErrText);
+      return res.status(502).json({ error: "Extraction service is busy right now, please try again in a moment", detail: lastErrText });
     }
 
     const orData = await orResponse.json();
